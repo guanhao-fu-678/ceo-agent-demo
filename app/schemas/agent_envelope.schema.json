@@ -1,0 +1,375 @@
+{
+  "$defs": {
+    "AgentAudit": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "documents": {
+          "items": {
+            "$ref": "#/$defs/AgentAuditDocument"
+          },
+          "title": "Documents",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "summary",
+        "documents",
+        "confidence"
+      ],
+      "title": "AgentAudit",
+      "type": "object"
+    },
+    "AgentAuditDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "relevance": {
+          "title": "Relevance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "relevance"
+      ],
+      "title": "AgentAuditDocument",
+      "type": "object"
+    },
+    "AgentKind": {
+      "enum": [
+        "reply",
+        "oa_approval",
+        "okr_review",
+        "no_action",
+        "error"
+      ],
+      "title": "AgentKind",
+      "type": "string"
+    },
+    "AgentSensitivityKind": {
+      "enum": [
+        "general",
+        "internal_personnel",
+        "external_candidate"
+      ],
+      "title": "AgentSensitivityKind",
+      "type": "string"
+    },
+    "DwsMarkdownDocumentReplyAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "dws_markdown_document_reply",
+          "title": "Type",
+          "type": "string"
+        },
+        "reply_text_ref": {
+          "const": "user_response.text",
+          "title": "Reply Text Ref",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reply_text_ref"
+      ],
+      "title": "DwsMarkdownDocumentReplyAction",
+      "type": "object"
+    },
+    "DwsMessageReactionAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "dws_message_reaction",
+          "title": "Type",
+          "type": "string"
+        },
+        "reaction_type": {
+          "default": "emoji",
+          "enum": [
+            "emoji",
+            "text_emotion"
+          ],
+          "title": "Reaction Type",
+          "type": "string"
+        },
+        "emoji": {
+          "default": "",
+          "title": "Emoji",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "emotion_id": {
+          "default": "",
+          "title": "Emotion Id",
+          "type": "string"
+        },
+        "emotion_name": {
+          "default": "",
+          "title": "Emotion Name",
+          "type": "string"
+        },
+        "background_id": {
+          "default": "",
+          "title": "Background Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "DwsMessageReactionAction",
+      "type": "object"
+    },
+    "DwsOaApprovalAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "dws_oa_approval_action",
+          "title": "Type",
+          "type": "string"
+        },
+        "process_instance_id": {
+          "title": "Process Instance Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "通过",
+            "拒绝"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "remark": {
+          "minLength": 1,
+          "title": "Remark",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "process_instance_id",
+        "task_id",
+        "action",
+        "remark"
+      ],
+      "title": "DwsOaApprovalAction",
+      "type": "object"
+    },
+    "DwsOaApprovalCommentAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "dws_oa_approval_comment",
+          "title": "Type",
+          "type": "string"
+        },
+        "process_instance_id": {
+          "title": "Process Instance Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "process_instance_id",
+        "text"
+      ],
+      "title": "DwsOaApprovalCommentAction",
+      "type": "object"
+    },
+    "PersistOkrReviewAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "persist_okr_review",
+          "title": "Type",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "request_id"
+      ],
+      "title": "PersistOkrReviewAction",
+      "type": "object"
+    },
+    "QueueOkrReviewAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue_okr_review",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "QueueOkrReviewAction",
+      "type": "object"
+    },
+    "SendDingTalkReplyAction": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "send_dingtalk_reply",
+          "title": "Type",
+          "type": "string"
+        },
+        "reply_text_ref": {
+          "const": "user_response.text",
+          "title": "Reply Text Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reply_text_ref"
+      ],
+      "title": "SendDingTalkReplyAction",
+      "type": "object"
+    },
+    "UserResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/UserResponseMode"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "sensitivity_kind": {
+          "$ref": "#/$defs/AgentSensitivityKind"
+        }
+      },
+      "required": [
+        "mode",
+        "text",
+        "sensitivity_kind"
+      ],
+      "title": "UserResponse",
+      "type": "object"
+    },
+    "UserResponseMode": {
+      "enum": [
+        "send_reply",
+        "ask_clarifying_question",
+        "handoff_to_human",
+        "no_reply"
+      ],
+      "title": "UserResponseMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "$ref": "#/$defs/AgentKind"
+    },
+    "user_response": {
+      "$ref": "#/$defs/UserResponse"
+    },
+    "system_actions": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "dws_markdown_document_reply": "#/$defs/DwsMarkdownDocumentReplyAction",
+            "dws_message_reaction": "#/$defs/DwsMessageReactionAction",
+            "dws_oa_approval_action": "#/$defs/DwsOaApprovalAction",
+            "dws_oa_approval_comment": "#/$defs/DwsOaApprovalCommentAction",
+            "persist_okr_review": "#/$defs/PersistOkrReviewAction",
+            "queue_okr_review": "#/$defs/QueueOkrReviewAction",
+            "send_dingtalk_reply": "#/$defs/SendDingTalkReplyAction"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/SendDingTalkReplyAction"
+          },
+          {
+            "$ref": "#/$defs/DwsMarkdownDocumentReplyAction"
+          },
+          {
+            "$ref": "#/$defs/DwsOaApprovalAction"
+          },
+          {
+            "$ref": "#/$defs/DwsOaApprovalCommentAction"
+          },
+          {
+            "$ref": "#/$defs/PersistOkrReviewAction"
+          },
+          {
+            "$ref": "#/$defs/QueueOkrReviewAction"
+          },
+          {
+            "$ref": "#/$defs/DwsMessageReactionAction"
+          }
+        ]
+      },
+      "title": "System Actions",
+      "type": "array"
+    },
+    "domain_payload": {
+      "additionalProperties": true,
+      "title": "Domain Payload",
+      "type": "object"
+    },
+    "audit": {
+      "$ref": "#/$defs/AgentAudit"
+    }
+  },
+  "required": [
+    "kind",
+    "user_response",
+    "system_actions",
+    "domain_payload",
+    "audit"
+  ],
+  "title": "CEO Agent Unified Envelope",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,507 @@
+import { persistFeedbackEvent } from "./feedback-storage.js";
+
+const EVENT_KEY_PREFIX = "feedback-spike:";
+const RATING_OPTIONS = [
+  { value: "very_unhelpful", label: "特别没用" },
+  { value: "not_useful", label: "不太有用" },
+  { value: "neutral", label: "一般" },
+  { value: "useful", label: "很有用" },
+  { value: "very_useful", label: "非常有用" },
+];
+const QUICK_RATING_DEFAULTS = {
+  up: "useful",
+  down: "not_useful",
+};
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function safeHeaders(headers) {
+  const allowed = new Set([
+    "content-type",
+    "user-agent",
+    "x-forwarded-for",
+    "x-vercel-id",
+    "x-dingtalk-signature",
+    "x-dingtalk-timestamp",
+  ]);
+  const output = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    const normalized = key.toLowerCase();
+    if (allowed.has(normalized)) {
+      output[normalized] = String(value).slice(0, 500);
+    }
+  }
+  return output;
+}
+
+function extractBody(req) {
+  if (req.body === undefined || req.body === null) {
+    return null;
+  }
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      const parsed = Object.fromEntries(new URLSearchParams(req.body.slice(0, 10000)));
+      return Object.keys(parsed).length ? parsed : req.body.slice(0, 2000);
+    }
+  }
+  return req.body;
+}
+
+function extractField(body, query, key) {
+  if (query && query[key] !== undefined) {
+    return Array.isArray(query[key]) ? query[key][0] : query[key];
+  }
+  if (body && typeof body === "object" && body[key] !== undefined) {
+    return body[key];
+  }
+  if (body && typeof body === "object" && body.value && body.value[key] !== undefined) {
+    return body.value[key];
+  }
+  if (body && typeof body === "object" && body.data && body.data[key] !== undefined) {
+    return body.data[key];
+  }
+  return "";
+}
+
+function extractFeedbackToken(body, query) {
+  return extractField(body, query, "feedback_token") || extractField(body, query, "feedbackToken");
+}
+
+function normalizeRating(value) {
+  const raw = String(value || "").trim();
+  if (QUICK_RATING_DEFAULTS[raw]) {
+    return QUICK_RATING_DEFAULTS[raw];
+  }
+  if (RATING_OPTIONS.some((option) => option.value === raw)) {
+    return raw;
+  }
+  return "neutral";
+}
+
+function ratingLabel(value) {
+  const match = RATING_OPTIONS.find((option) => option.value === value);
+  return match ? match.label : "一般";
+}
+
+function formAction(req) {
+  const host = req.headers && (req.headers["x-forwarded-host"] || req.headers.host);
+  const protocol = req.headers && req.headers["x-forwarded-proto"];
+  if (host) {
+    return `${protocol || "https"}://${host}/api/dingtalk-feedback-spike`;
+  }
+  return "/api/dingtalk-feedback-spike";
+}
+
+function feedbackContext(req, body) {
+  const rating = normalizeRating(extractField(body, req.query, "rating"));
+  return {
+    source: String(extractField(body, req.query, "source") || ""),
+    feedback_token: String(extractFeedbackToken(body, req.query) || ""),
+    attempt_id: String(
+      extractField(body, req.query, "attempt_id") ||
+        extractField(body, req.query, "attemptId") ||
+        "",
+    ),
+    rating,
+    original_text: String(extractField(body, req.query, "original_text") || ""),
+    reply_text: String(extractField(body, req.query, "reply_text") || ""),
+    comment: String(extractField(body, req.query, "comment") || "").slice(0, 2000),
+    suggested_reply: String(
+      extractField(body, req.query, "suggested_reply") ||
+        extractField(body, req.query, "corrected_reply") ||
+        "",
+    ).slice(0, 2000),
+  };
+}
+
+function renderRatingOptions(selected) {
+  return RATING_OPTIONS.map((option) => {
+    const checked = option.value === selected ? "checked" : "";
+    return `
+      <label class="rating-option">
+        <input type="radio" name="rating" value="${option.value}" ${checked} />
+        <span>${escapeHtml(option.label)}</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function renderContextBlock(title, text, emptyText) {
+  const content = text.trim() ? escapeHtml(text) : escapeHtml(emptyText);
+  const emptyClass = text.trim() ? "" : " muted";
+  return `
+    <section class="context-block">
+      <div class="context-title">${escapeHtml(title)}</div>
+      <div class="context-text${emptyClass}">${content}</div>
+    </section>
+  `;
+}
+
+function renderFeedbackPage(req, context) {
+  const action = formAction(req);
+  const attemptLabel = context.attempt_id.trim() ? context.attempt_id.trim() : "未关联";
+  const currentLabel = ratingLabel(context.rating);
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>这条回复有帮助吗？</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #edf3fc;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #5d6b82;
+      --line: #d8e2f1;
+      --soft: #f9fbff;
+      --accent: #2f62f6;
+      --accent-soft: #eef4ff;
+      --shadow: 0 24px 70px rgba(42, 58, 90, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 88px 16px;
+    }
+    main {
+      width: min(760px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .brand img {
+      width: 81px;
+      height: 24px;
+      display: block;
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.18;
+      letter-spacing: -0.03em;
+    }
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .attempt {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .rating-pill {
+      flex: none;
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: var(--accent);
+      padding: 8px 13px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .context-block {
+      margin: 14px 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--soft);
+      overflow: hidden;
+    }
+    .context-title {
+      padding: 14px 14px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .context-text {
+      padding: 4px 14px 14px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+      color: var(--text);
+      font-size: 15px;
+    }
+    .muted { color: var(--muted); }
+    .rating-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 22px 0 10px;
+    }
+    .rating-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .rating-option input { position: absolute; opacity: 0; pointer-events: none; }
+    .rating-option span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      color: #25324b;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+    }
+    .rating-option input:checked + span {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    textarea {
+      width: 100%;
+      min-height: 118px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 13px;
+      font: inherit;
+      line-height: 1.5;
+      outline: none;
+      margin-bottom: 22px;
+    }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 9px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 13px 18px;
+      cursor: pointer;
+    }
+    @media (max-width: 640px) {
+      main { padding: 22px; border-radius: 14px; }
+      header { display: block; }
+      .rating-pill { display: inline-flex; margin-top: 14px; }
+      .rating-row { grid-template-columns: 1fr; }
+      .rating-option span { justify-content: flex-start; }
+      .actions { display: block; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="/friday-logo.svg" alt="Friday" /></div>
+    <header>
+      <div>
+        <h1>这条回复有帮助吗？</h1>
+        <div class="sub">你的反馈会帮助改进自动回复质量。</div>
+        <div class="attempt">Attempt #${escapeHtml(attemptLabel)}</div>
+      </div>
+      <div class="rating-pill" id="currentRating">${escapeHtml(currentLabel)}</div>
+    </header>
+    <form method="post" action="${escapeHtml(action)}">
+      <input type="hidden" name="source" value="${escapeHtml(context.source)}" />
+      <input type="hidden" name="feedback_token" value="${escapeHtml(context.feedback_token)}" />
+      <input type="hidden" name="attempt_id" value="${escapeHtml(context.attempt_id)}" />
+      <input type="hidden" name="original_text" value="${escapeHtml(context.original_text)}" />
+      <input type="hidden" name="reply_text" value="${escapeHtml(context.reply_text)}" />
+      ${renderContextBlock("原话", context.original_text, "这条反馈链接没有携带原话。")}
+      ${renderContextBlock("回复样例", context.reply_text, "这条反馈链接没有携带回复内容。")}
+      <label class="rating-label">评分</label>
+      <div class="rating-row">
+        ${renderRatingOptions(context.rating)}
+      </div>
+      <label class="rating-label" for="comment">评语（可选）</label>
+      <textarea id="comment" name="comment" maxlength="2000" autofocus placeholder="可以补充哪里没答好、哪里有帮助。">${escapeHtml(context.comment)}</textarea>
+      <div class="actions">
+        <button type="submit">提交反馈</button>
+      </div>
+    </form>
+  </main>
+  <script>
+    const ratingLabels = ${JSON.stringify(Object.fromEntries(RATING_OPTIONS.map((option) => [option.value, option.label])))};
+    const currentRating = document.getElementById("currentRating");
+    document.querySelectorAll('input[name="rating"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) currentRating.textContent = ratingLabels[input.value] || "一般";
+      });
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function renderSubmittedPage(context, persisted, persistError) {
+  const title = persisted ? "反馈已提交" : "提交遇到问题";
+  const mark = persisted ? "✓" : "!";
+  const message = persisted
+    ? "谢谢，已经收到。"
+    : "反馈暂时没有写入成功，可以稍后再试，或直接回复我。";
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #f5f7fb;
+      color: #19212e;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(560px, 100%);
+      background: #fff;
+      border: 1px solid #dde4ee;
+      border-radius: 18px;
+      box-shadow: 0 18px 45px rgba(31, 42, 68, 0.12);
+      padding: 30px;
+      text-align: center;
+    }
+    .mark {
+      width: 48px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #e8f0ff;
+      color: #2563eb;
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 10px; font-size: 24px; letter-spacing: 0; }
+    p { margin: 0; color: #697386; line-height: 1.6; }
+    .meta {
+      margin-top: 18px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fbfcff;
+      color: #344054;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">${mark}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <div class="meta">${persisted ? "已记录" : `错误：${escapeHtml(persistError || "存储未配置")}`}</div>
+  </main>
+</body>
+</html>`;
+}
+
+function wantsJson(req) {
+  const format = req.query && (Array.isArray(req.query.format) ? req.query.format[0] : req.query.format);
+  return format === "json" || (req.headers && String(req.headers.accept || "").includes("application/json"));
+}
+
+export default async function handler(req, res) {
+  if (!["GET", "POST"].includes(req.method)) {
+    res.setHeader("Allow", "GET, POST");
+    return res.status(405).json({ ok: false, error: "method_not_allowed" });
+  }
+
+  const body = extractBody(req);
+  const context = feedbackContext(req, body);
+
+  if (req.method === "GET" && !wantsJson(req)) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(renderFeedbackPage(req, context));
+  }
+
+  const receivedAt = new Date().toISOString();
+  const suffix = Math.random().toString(36).slice(2, 10);
+  const event = {
+    key: `${EVENT_KEY_PREFIX}${Date.now()}:${suffix}`,
+    received_at: receivedAt,
+    method: req.method,
+    source: context.source,
+    feedback_token: context.feedback_token,
+    attempt_id: context.attempt_id,
+    rating: context.rating,
+    rating_label: ratingLabel(context.rating),
+    original_text: context.original_text,
+    reply_text: context.reply_text,
+    comment: context.comment,
+    suggested_reply: context.suggested_reply,
+    query: req.query || {},
+    body,
+    headers: safeHeaders(req.headers),
+  };
+
+  let persisted = false;
+  let persistError = "";
+  let storageBackend = "";
+  try {
+    const result = await persistFeedbackEvent(event);
+    persisted = result.persisted;
+    persistError = result.error;
+    storageBackend = result.backend || "";
+  } catch (error) {
+    persistError = error instanceof Error ? error.message : String(error);
+  }
+
+  if (wantsJson(req)) {
+    return res.status(200).json({
+      ok: persisted,
+      persisted,
+      persist_error: persistError,
+      storage_backend: storageBackend,
+      feedback_token: event.feedback_token,
+      attempt_id: event.attempt_id,
+      rating: event.rating,
+      rating_label: event.rating_label,
+    });
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  return res.status(200).send(renderSubmittedPage(context, persisted, persistError));
+}

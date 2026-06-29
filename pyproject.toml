@@ -1,0 +1,36 @@
+[project]
+name = "ceo-agent-service"
+version = "0.1.0"
+description = "Local-first DingTalk executive auto-reply service"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "fastapi>=0.115",
+  "jieba>=0.42",
+  "pypdf>=5.0",
+  "pydantic>=2.10",
+  "uvicorn>=0.34"
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28",
+  "pytest>=8.3"
+]
+
+[project.scripts]
+ceo-agent = "app.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+  "live: explicit opt-in tests that may call real dws, Codex, or DingTalk"
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

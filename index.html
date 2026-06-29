@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>这条回复有帮助吗？</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #edf3fc;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #5d6b82;
+      --line: #d8e2f1;
+      --soft: #f9fbff;
+      --accent: #2f62f6;
+      --accent-soft: #eef4ff;
+      --danger: #9a2f2f;
+      --danger-soft: #fff1f1;
+      --shadow: 0 24px 70px rgba(42, 58, 90, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 88px 16px;
+    }
+    main {
+      width: min(760px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .brand img {
+      width: 81px;
+      height: 24px;
+      display: block;
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.18;
+      letter-spacing: -0.03em;
+    }
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .attempt {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .rating-pill {
+      flex: none;
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: var(--accent);
+      padding: 8px 13px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .context-block {
+      margin: 14px 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--soft);
+      overflow: hidden;
+    }
+    .context-title {
+      padding: 14px 14px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .context-text {
+      padding: 4px 14px 14px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+      color: var(--text);
+      font-size: 15px;
+    }
+    .rating-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 22px 0 10px;
+    }
+    .rating-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .rating-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .rating-option span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      color: #25324b;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+    }
+    .rating-option input:checked + span {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    textarea {
+      width: 100%;
+      min-height: 118px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 13px;
+      font: inherit;
+      line-height: 1.5;
+      outline: none;
+      margin-bottom: 22px;
+    }
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    button[type="submit"] {
+      appearance: none;
+      border: 0;
+      border-radius: 9px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 13px 18px;
+      cursor: pointer;
+    }
+    button[disabled] {
+      cursor: wait;
+      opacity: 0.62;
+    }
+    .result {
+      display: none;
+      margin-top: 18px;
+      padding: 13px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .result.ok {
+      display: block;
+      border: 1px solid rgba(15, 143, 115, 0.24);
+      background: var(--accent-soft);
+      color: #075644;
+    }
+    .result.error {
+      display: block;
+      border: 1px solid rgba(154, 47, 47, 0.22);
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    @media (max-width: 640px) {
+      body { padding: 18px 12px; }
+      main { padding: 22px; border-radius: 16px; }
+      header { display: block; }
+      .rating-pill { display: inline-flex; margin-top: 14px; }
+      .rating-row { grid-template-columns: 1fr; }
+      .rating-option span { justify-content: flex-start; }
+      .actions { display: block; }
+      button[type="submit"] { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="friday-logo.svg" alt="Friday" /></div>
+    <header>
+      <div>
+        <h1>这条回复有帮助吗？</h1>
+        <div class="sub">你的反馈会帮助改进自动回复质量。</div>
+        <div class="attempt" id="attemptIdView">Attempt #2007</div>
+      </div>
+      <div class="rating-pill" id="currentRating">很有用</div>
+    </header>
+
+    <form id="feedbackForm">
+      <div class="context-block">
+        <div class="context-title">原话</div>
+        <div class="context-text" id="originalTextView"></div>
+      </div>
+
+      <div class="context-block">
+        <div class="context-title">回复样例</div>
+        <div class="context-text" id="replyTextView"></div>
+      </div>
+
+      <label class="rating-label">评分</label>
+      <div class="rating-row">
+        <label class="rating-option"><input type="radio" name="rating" value="very_unhelpful" /><span>特别没用</span></label>
+        <label class="rating-option"><input type="radio" name="rating" value="not_useful" /><span>不太有用</span></label>
+        <label class="rating-option"><input type="radio" name="rating" value="neutral" /><span>一般</span></label>
+        <label class="rating-option"><input type="radio" name="rating" value="useful" checked /><span>很有用</span></label>
+        <label class="rating-option"><input type="radio" name="rating" value="very_useful" /><span>非常有用</span></label>
+      </div>
+
+      <label class="rating-label" for="comment">评语（可选）</label>
+      <textarea id="comment" name="comment" maxlength="2000" autofocus placeholder="可以补充哪里没答好、哪里有帮助。"></textarea>
+
+      <div class="actions">
+        <button id="submitButton" type="submit">提交反馈</button>
+      </div>
+      <div id="result" class="result"></div>
+    </form>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const fallbackOriginal = "这条现在不能按已闭环回填。周日节点已经过了，但我这边还...";
+    const fallbackReply = "对，这条不能闭环。冠皓你就按这个验收口径卡住：页面链接...";
+    const token = params.get("feedback_token") || `demo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const replyText = params.get("reply_text") || fallbackReply;
+    const originalText = params.get("original_text") || fallbackOriginal;
+    const attemptId = params.get("attempt_id") || "2007";
+    const source = params.get("source") || "friday-feedback-page";
+    const ratingAliases = {
+      up: "useful",
+      down: "not_useful",
+    };
+    const ratingValues = new Set(["very_unhelpful", "not_useful", "neutral", "useful", "very_useful"]);
+    const rawRating = params.get("rating") || "useful";
+    const initialRating = ratingAliases[rawRating] || (ratingValues.has(rawRating) ? rawRating : "useful");
+    const ratingLabels = {
+      very_unhelpful: "特别没用",
+      not_useful: "不太有用",
+      neutral: "一般",
+      useful: "很有用",
+      very_useful: "非常有用",
+    };
+
+    const replyTextView = document.getElementById("replyTextView");
+    const originalTextView = document.getElementById("originalTextView");
+    const attemptIdView = document.getElementById("attemptIdView");
+    const currentRating = document.getElementById("currentRating");
+    const form = document.getElementById("feedbackForm");
+    const submitButton = document.getElementById("submitButton");
+    const result = document.getElementById("result");
+
+    replyTextView.textContent = replyText;
+    originalTextView.textContent = originalText;
+    attemptIdView.textContent = `Attempt #${attemptId}`;
+    currentRating.textContent = ratingLabels[initialRating] || "很有用";
+    form.querySelectorAll('input[name="rating"]').forEach((input) => {
+      if (input.value === initialRating) input.checked = true;
+      input.addEventListener("change", () => {
+        if (input.checked) currentRating.textContent = ratingLabels[input.value] || "一般";
+      });
+    });
+
+    function setResult(kind, text) {
+      result.className = `result ${kind}`;
+      result.textContent = text;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submitButton.disabled = true;
+      setResult("ok", "正在提交...");
+      const formData = new FormData(form);
+      const payload = {
+        source,
+        feedback_token: token,
+        attempt_id: attemptId,
+        rating: formData.get("rating"),
+        original_text: originalText,
+        reply_text: replyText,
+        comment: formData.get("comment") || "",
+        suggested_reply: "",
+      };
+      try {
+        const response = await fetch("/api/dingtalk-feedback-spike?format=json", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!data.persisted) {
+          throw new Error(data.persist_error || "反馈暂未写入");
+        }
+        setResult("ok", "已收到，谢谢。");
+        form.reset();
+      } catch (error) {
+        setResult("error", `提交遇到问题，请稍后再试或直接回复我。${error && error.message ? " " + error.message : ""}`);
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
